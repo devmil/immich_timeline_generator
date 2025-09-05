@@ -18,10 +18,21 @@ void main(List<String> arguments) async {
       help: 'Minimum number of photos per location (default: 3)',
     )
     ..addOption(
+      'concurrent',
+      abbr: 'c',
+      defaultsTo: '20',
+      help: 'Number of concurrent API requests (default: 20)',
+    )
+    ..addOption(
       'output',
       abbr: 'o',
       defaultsTo: 'Records.json',
       help: 'Output file path (default: Records.json)',
+    )
+    ..addFlag(
+      'skip-camera-selection',
+      help: 'Skip camera selection and include all cameras automatically',
+      negatable: false,
     )
     ..addFlag(
       'help',
@@ -51,11 +62,19 @@ void main(List<String> arguments) async {
     // Parse optional arguments
     final albumName = results['album'] as String?;
     final minPhotos = int.tryParse(results['min-photos'] as String) ?? 3;
+    final concurrent = int.tryParse(results['concurrent'] as String) ?? 20;
+    final skipCameraSelection = results['skip-camera-selection'] as bool;
     final outputPath = results['output'] as String;
 
     // Validate min-photos
     if (minPhotos < 1) {
       print('Error: min-photos must be at least 1');
+      exit(1);
+    }
+
+    // Validate concurrent requests
+    if (concurrent < 1 || concurrent > 100) {
+      print('Error: concurrent requests must be between 1 and 100');
       exit(1);
     }
 
@@ -65,7 +84,9 @@ void main(List<String> arguments) async {
       apiKey: apiKey,
       albumName: albumName,
       minPhotosPerLocation: minPhotos,
+      concurrentRequests: concurrent,
       outputPath: outputPath,
+      skipCameraSelection: skipCameraSelection,
     );
 
     // Run the application
@@ -101,5 +122,10 @@ void _printUsage(ArgParser parser) {
   print('  # Custom output file');
   print(
     '  dart run bin/immich_timeline_generator.dart -u https://immich.example.com -k your-api-key -o my_timeline.json',
+  );
+  print('');
+  print('  # High performance for large libraries');
+  print(
+    '  dart run bin/immich_timeline_generator.dart -u https://immich.example.com -k your-api-key -c 50',
   );
 }

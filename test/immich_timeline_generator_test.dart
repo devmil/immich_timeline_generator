@@ -21,7 +21,7 @@ void main() {
 
       expect(json['latitudeE7'], equals(377749000));
       expect(json['longitudeE7'], equals(-1224194000));
-      expect(json['timestampMs'], equals('1704067200000'));
+      expect(json['timestamp'], equals('2024-01-01T00:00:00.000Z'));
       expect(json['accuracy'], equals(15));
     });
   });

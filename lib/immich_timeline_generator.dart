@@ -100,6 +100,8 @@ class LocationPoint {
   final DateTime timestamp;
   final String? address;
   final int accuracy;
+  final String? cameraMake;
+  final String? cameraModel;
 
   LocationPoint({
     required this.latitude,
@@ -107,13 +109,27 @@ class LocationPoint {
     required this.timestamp,
     this.address,
     this.accuracy = 10,
+    this.cameraMake,
+    this.cameraModel,
   });
+
+  String get cameraInfo {
+    if (cameraMake != null && cameraModel != null) {
+      return '$cameraMake $cameraModel';
+    } else if (cameraModel != null) {
+      return cameraModel!;
+    } else if (cameraMake != null) {
+      return cameraMake!;
+    } else {
+      return 'Unknown Camera';
+    }
+  }
 
   Map<String, dynamic> toGoogleTimelineJson() {
     return {
       'latitudeE7': (latitude * 10000000).round(),
       'longitudeE7': (longitude * 10000000).round(),
-      'timestampMs': timestamp.millisecondsSinceEpoch.toString(),
+      'timestamp': timestamp.toIso8601String(),
       'accuracy': accuracy,
     };
   }
@@ -123,103 +139,235 @@ class LocationPoint {
 class TimelineGenerator {
   final ImmichClient client;
   final int minPhotosPerLocation;
+  final int concurrentRequests;
 
-  TimelineGenerator({required this.client, this.minPhotosPerLocation = 3});
+  TimelineGenerator({
+    required this.client,
+    this.minPhotosPerLocation = 3,
+    this.concurrentRequests = 20, // Number of concurrent API requests
+  });
 
-  /// Generate timeline from Immich photos
-  Future<List<LocationPoint>> generateTimeline({String? albumId}) async {
-    print('Fetching assets from Immich...');
-    final assets = await client.fetchAssets(albumId: albumId);
-    print('Found ${assets.length} assets');
+  /// Process a single asset and return LocationPoint if valid
+  Future<LocationPoint?> _processAsset(Map<String, dynamic> asset) async {
+    final assetId = asset['id'];
 
-    final locationPoints = <LocationPoint>[];
-    final locationCounts = <String, int>{};
-    int processedCount = 0;
-    int skippedCount = 0;
+    try {
+      final details = await client.fetchAssetDetails(assetId);
+      if (details == null) return null;
 
-    for (int i = 0; i < assets.length; i++) {
-      final asset = assets[i];
-      final assetId = asset['id'];
+      final exifInfo = details['exifInfo'];
+      if (exifInfo == null) return null;
 
-      // Show progress
-      if (i % 50 == 0 || i == assets.length - 1) {
-        final progress = ((i + 1) / assets.length * 100).toStringAsFixed(1);
-        stdout.write(
-          '\rProcessing assets: $progress% (${i + 1}/${assets.length}) | Found: $processedCount | Skipped: $skippedCount',
-        );
-      }
+      final latitude = exifInfo['latitude'];
+      final longitude = exifInfo['longitude'];
 
-      try {
-        final details = await client.fetchAssetDetails(assetId);
-        if (details == null) {
-          skippedCount++;
-          continue;
-        }
+      if (latitude == null || longitude == null) return null;
 
-        final exifInfo = details['exifInfo'];
-        if (exifInfo == null) {
-          skippedCount++;
-          continue;
-        }
+      final dateTimeOriginal =
+          details['fileCreatedAt'] ?? details['fileModifiedAt'];
+      if (dateTimeOriginal == null) return null;
 
-        final latitude = exifInfo['latitude'];
-        final longitude = exifInfo['longitude'];
+      final timestamp = DateTime.parse(dateTimeOriginal);
 
-        if (latitude == null || longitude == null) {
-          skippedCount++;
-          continue;
-        }
+      // Extract camera information
+      final cameraMake = exifInfo['make']?.toString().trim();
+      final cameraModel = exifInfo['model']?.toString().trim();
 
-        final dateTimeOriginal =
-            details['fileCreatedAt'] ?? details['fileModifiedAt'];
-        if (dateTimeOriginal == null) {
-          skippedCount++;
-          continue;
-        }
+      return LocationPoint(
+        latitude: latitude.toDouble(),
+        longitude: longitude.toDouble(),
+        timestamp: timestamp,
+        cameraMake: cameraMake?.isEmpty == true ? null : cameraMake,
+        cameraModel: cameraModel?.isEmpty == true ? null : cameraModel,
+      );
+    } catch (e) {
+      // Silently skip assets with errors
+      return null;
+    }
+  }
 
-        final timestamp = DateTime.parse(dateTimeOriginal);
+  /// Process assets in parallel batches
+  Future<List<LocationPoint>> _processAssetsInParallel(
+    List<Map<String, dynamic>> assets,
+  ) async {
+    final allPoints = <LocationPoint>[];
+    final totalAssets = assets.length;
+    int processedAssets = 0;
 
-        // Create location key for counting
-        final locationKey =
-            '${latitude.toStringAsFixed(2)},${longitude.toStringAsFixed(2)}';
-        locationCounts[locationKey] = (locationCounts[locationKey] ?? 0) + 1;
+    // Process assets in batches to avoid overwhelming the server
+    for (int i = 0; i < assets.length; i += concurrentRequests) {
+      final batchEnd = (i + concurrentRequests < assets.length)
+          ? i + concurrentRequests
+          : assets.length;
+      final batch = assets.sublist(i, batchEnd);
 
-        final locationPoint = LocationPoint(
-          latitude: latitude.toDouble(),
-          longitude: longitude.toDouble(),
-          timestamp: timestamp,
-        );
+      // Process this batch in parallel
+      final futures = batch.map((asset) => _processAsset(asset)).toList();
+      final results = await Future.wait(futures);
 
-        locationPoints.add(locationPoint);
-        processedCount++;
+      // Filter out null results and add to collection
+      final validPoints = results.whereType<LocationPoint>().toList();
+      allPoints.addAll(validPoints);
 
-        // Add small delay to avoid overwhelming the server
-        if (i % 50 == 0 && i > 0) {
-          await Future.delayed(Duration(milliseconds: 100));
-        }
-      } catch (e) {
-        skippedCount++;
-        if (i % 100 == 0) {
-          print('\nWarning: Error processing asset $assetId: $e');
-        }
+      processedAssets += batch.length;
+      final progress = (processedAssets / totalAssets * 100).toStringAsFixed(1);
+      final foundCount = allPoints.length;
+      final skippedCount = processedAssets - foundCount;
+
+      stdout.write(
+        '\rProcessing assets: $progress% ($processedAssets/$totalAssets) | Found: $foundCount | Skipped: $skippedCount',
+      );
+
+      // Small delay between batches to be nice to the server
+      if (i + concurrentRequests < assets.length) {
+        await Future.delayed(Duration(milliseconds: 50));
       }
     }
 
-    print('\nFiltering locations with minimum $minPhotosPerLocation photos...');
+    print(''); // New line after progress
+    return allPoints;
+  }
+
+  /// Analyze cameras used and get user selection
+  Future<Set<String>> _selectCameras(List<LocationPoint> allPoints) async {
+    // Count photos per camera
+    final cameraStats = <String, int>{};
+    for (final point in allPoints) {
+      final cameraInfo = point.cameraInfo;
+      cameraStats[cameraInfo] = (cameraStats[cameraInfo] ?? 0) + 1;
+    }
+
+    // Sort cameras by photo count (most used first)
+    final sortedCameras = cameraStats.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    print('\nDetected cameras:');
+    print('=================');
+    for (int i = 0; i < sortedCameras.length; i++) {
+      final camera = sortedCameras[i];
+      print('${i + 1}. ${camera.key} (${camera.value} photos)');
+    }
+
+    print('\nSelect cameras to include in timeline:');
+    print('Enter camera numbers separated by commas (e.g., 1,2,3)');
+    print('Or enter "all" to include all cameras');
+    print('Or enter "help" to see camera details again');
+
+    while (true) {
+      stdout.write('Your choice: ');
+      final input = stdin.readLineSync()?.trim().toLowerCase();
+
+      if (input == null || input.isEmpty) {
+        print('Please enter a valid choice.');
+        continue;
+      }
+
+      if (input == 'help') {
+        print('\nDetected cameras:');
+        for (int i = 0; i < sortedCameras.length; i++) {
+          final camera = sortedCameras[i];
+          print('${i + 1}. ${camera.key} (${camera.value} photos)');
+        }
+        continue;
+      }
+
+      if (input == 'all') {
+        final allCameras = sortedCameras.map((e) => e.key).toSet();
+        print('Selected all cameras: ${allCameras.join(', ')}');
+        return allCameras;
+      }
+
+      try {
+        final selectedNumbers = input
+            .split(',')
+            .map((s) => int.parse(s.trim()))
+            .toList();
+
+        final selectedCameras = <String>{};
+        bool validSelection = true;
+
+        for (final number in selectedNumbers) {
+          if (number < 1 || number > sortedCameras.length) {
+            print(
+              'Error: Camera number $number is not valid. Please choose from 1-${sortedCameras.length}',
+            );
+            validSelection = false;
+            break;
+          }
+          selectedCameras.add(sortedCameras[number - 1].key);
+        }
+
+        if (validSelection) {
+          print('Selected cameras: ${selectedCameras.join(', ')}');
+
+          // Show stats for selected cameras
+          final totalSelectedPhotos = selectedCameras
+              .map((camera) => cameraStats[camera] ?? 0)
+              .fold(0, (a, b) => a + b);
+          print('Total photos from selected cameras: $totalSelectedPhotos');
+
+          return selectedCameras;
+        }
+      } catch (e) {
+        print(
+          'Error: Invalid input format. Please enter numbers separated by commas or "all"',
+        );
+      }
+    }
+  }
+
+  Future<List<LocationPoint>> generateTimeline({
+    String? albumId,
+    bool skipCameraSelection = false,
+  }) async {
+    print('Fetching assets from Immich...');
+    final assets = await client.fetchAssets(albumId: albumId);
+    print('Found ${assets.length} assets');
+    print('Processing with $concurrentRequests concurrent requests...');
+
+    // Process all assets in parallel
+    final locationPoints = await _processAssetsInParallel(assets);
+
+    print('Found ${locationPoints.length} assets with GPS coordinates');
+
+    List<LocationPoint> cameraFilteredPoints;
+
+    if (skipCameraSelection) {
+      print('Skipping camera selection - using all photos');
+      cameraFilteredPoints = locationPoints;
+    } else {
+      // Camera selection
+      final selectedCameras = await _selectCameras(locationPoints);
+
+      // Filter by selected cameras
+      cameraFilteredPoints = locationPoints.where((point) {
+        return selectedCameras.contains(point.cameraInfo);
+      }).toList();
+
+      print('After camera filtering: ${cameraFilteredPoints.length} points');
+    }
+
+    // Count locations for filtering
+    final locationCounts = <String, int>{};
+    for (final point in cameraFilteredPoints) {
+      final locationKey =
+          '${point.latitude.toStringAsFixed(2)},${point.longitude.toStringAsFixed(2)}';
+      locationCounts[locationKey] = (locationCounts[locationKey] ?? 0) + 1;
+    }
+
+    print('Filtering locations with minimum $minPhotosPerLocation photos...');
 
     // Filter locations based on minimum photo count
-    final filteredPoints = locationPoints.where((point) {
+    final filteredPoints = cameraFilteredPoints.where((point) {
       final locationKey =
-          '${point.latitude.toStringAsFixed(4)},${point.longitude.toStringAsFixed(4)}';
+          '${point.latitude.toStringAsFixed(2)},${point.longitude.toStringAsFixed(2)}';
       return (locationCounts[locationKey] ?? 0) >= minPhotosPerLocation;
     }).toList();
 
     // Sort by timestamp
     filteredPoints.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
-    print(
-      'Filtered ${locationPoints.length} points to ${filteredPoints.length} points',
-    );
+    print('Final result: ${filteredPoints.length} points after all filtering');
     return filteredPoints;
   }
 
@@ -250,14 +398,18 @@ class AppConfig {
   final String apiKey;
   final String? albumName;
   final int minPhotosPerLocation;
+  final int concurrentRequests;
   final String outputPath;
+  final bool skipCameraSelection;
 
   AppConfig({
     required this.immichUrl,
     required this.apiKey,
     this.albumName,
     this.minPhotosPerLocation = 3,
+    this.concurrentRequests = 20,
     required this.outputPath,
+    this.skipCameraSelection = false,
   });
 }
 
@@ -272,6 +424,7 @@ class ImmichTimelineApp {
     generator = TimelineGenerator(
       client: client,
       minPhotosPerLocation: config.minPhotosPerLocation,
+      concurrentRequests: config.concurrentRequests,
     );
   }
 
@@ -305,7 +458,10 @@ class ImmichTimelineApp {
       }
 
       // Generate timeline
-      final timeline = await generator.generateTimeline(albumId: albumId);
+      final timeline = await generator.generateTimeline(
+        albumId: albumId,
+        skipCameraSelection: config.skipCameraSelection,
+      );
 
       if (timeline.isEmpty) {
         print('No location data found matching the criteria.');
