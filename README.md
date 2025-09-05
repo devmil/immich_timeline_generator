@@ -2,13 +2,18 @@
 
 A Dart console application that connects to an Immich instance, extracts GPS coordinates from photos, and generates a timeline in Google's Records.json format that can be imported into Reitti and other self-hosted timeline services.
 
+![Screenshot 1](resources/screenshot_1.png)
+
 ## Features
 
 - **Immich Integration**: Connects to your Immich server using API key authentication
 - **GPS Extraction**: Extracts GPS coordinates from photo EXIF data
 - **Google Timeline Format**: Generates Records.json compatible with most timeline services
+- **Interactive Camera Selection**: Navigate with arrow keys and select cameras with space bar
+- **Multi-User Support**: Filter by specific cameras to separate timelines for different users
 - **Album Filtering**: Option to limit processing to specific albums/folders
 - **Location Filtering**: Configurable minimum number of photos per location to filter out random GPS coordinates
+- **High Performance**: Parallel processing with configurable concurrency for large libraries
 - **Progress Tracking**: Shows real-time progress for large photo libraries
 - **Error Handling**: Robust error handling with informative messages
 
@@ -47,8 +52,22 @@ dart run bin/immich_timeline_generator.dart \
 - `-k, --api-key`: **Required** - Immich API key
 - `-a, --album`: *Optional* - Album name to filter photos (case-insensitive)
 - `-m, --min-photos`: *Optional* - Minimum number of photos per location (default: 3)
+- `-c, --concurrent`: *Optional* - Number of concurrent API requests (default: 20)
 - `-o, --output`: *Optional* - Output file path (default: Records.json)
+- `--skip-camera-selection`: *Optional* - Skip interactive camera selection and include all cameras
 - `-h, --help`: Show help message
+
+## Camera Selection
+
+For multi-user Immich libraries, the application provides an interactive camera selection interface:
+
+- **Interactive Menu**: Use arrow keys to navigate and space bar to select cameras
+- **Smart Defaults**: "All cameras" is selected by default for safety
+- **Photo Counts**: See how many photos each camera contributed
+- **Multi-Selection**: Choose any combination of cameras to include
+- **Skip Option**: Use `--skip-camera-selection` to automatically include all cameras
+
+See [INTERACTIVE_CAMERA_SELECTION.md](INTERACTIVE_CAMERA_SELECTION.md) for detailed usage instructions.
 
 ## Getting Your Immich API Key
 

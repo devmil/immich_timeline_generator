@@ -228,7 +228,7 @@ class TimelineGenerator {
     return allPoints;
   }
 
-  /// Analyze cameras used and get user selection
+  /// Analyze cameras used and get user selection with paginated UI
   Future<Set<String>> _selectCameras(List<LocationPoint> allPoints) async {
     // Count photos per camera
     final cameraStats = <String, int>{};
@@ -241,79 +241,120 @@ class TimelineGenerator {
     final sortedCameras = cameraStats.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    print('\nDetected cameras:');
-    print('=================');
-    for (int i = 0; i < sortedCameras.length; i++) {
-      final camera = sortedCameras[i];
-      print('${i + 1}. ${camera.key} (${camera.value} photos)');
-    }
+    print('\nDetected ${sortedCameras.length} camera(s):');
+    print('=' * 60);
 
-    print('\nSelect cameras to include in timeline:');
-    print('Enter camera numbers separated by commas (e.g., 1,2,3)');
-    print('Or enter "all" to include all cameras');
-    print('Or enter "help" to see camera details again');
+    final selectedCameras = <String>{};
+    const int itemsPerPage = 8; // Show 8 cameras per page + navigation options
+    int currentPage = 0;
+    final int totalPages = ((sortedCameras.length - 1) ~/ itemsPerPage) + 1;
 
     while (true) {
-      stdout.write('Your choice: ');
-      final input = stdin.readLineSync()?.trim().toLowerCase();
+      // Clear screen and show current page
+      print('\n' * 2); // Add some space
+      print('Camera Selection - Page ${currentPage + 1} of $totalPages');
+      print('=' * 60);
 
-      if (input == null || input.isEmpty) {
-        print('Please enter a valid choice.');
-        continue;
-      }
+      // Calculate page bounds
+      final startIndex = currentPage * itemsPerPage;
+      final endIndex = (startIndex + itemsPerPage).clamp(
+        0,
+        sortedCameras.length,
+      );
 
-      if (input == 'help') {
-        print('\nDetected cameras:');
-        for (int i = 0; i < sortedCameras.length; i++) {
-          final camera = sortedCameras[i];
-          print('${i + 1}. ${camera.key} (${camera.value} photos)');
-        }
-        continue;
-      }
-
-      if (input == 'all') {
-        final allCameras = sortedCameras.map((e) => e.key).toSet();
-        print('Selected all cameras: ${allCameras.join(', ')}');
-        return allCameras;
-      }
-
-      try {
-        final selectedNumbers = input
-            .split(',')
-            .map((s) => int.parse(s.trim()))
-            .toList();
-
-        final selectedCameras = <String>{};
-        bool validSelection = true;
-
-        for (final number in selectedNumbers) {
-          if (number < 1 || number > sortedCameras.length) {
-            print(
-              'Error: Camera number $number is not valid. Please choose from 1-${sortedCameras.length}',
-            );
-            validSelection = false;
-            break;
-          }
-          selectedCameras.add(sortedCameras[number - 1].key);
-        }
-
-        if (validSelection) {
-          print('Selected cameras: ${selectedCameras.join(', ')}');
-
-          // Show stats for selected cameras
-          final totalSelectedPhotos = selectedCameras
-              .map((camera) => cameraStats[camera] ?? 0)
-              .fold(0, (a, b) => a + b);
-          print('Total photos from selected cameras: $totalSelectedPhotos');
-
-          return selectedCameras;
-        }
-      } catch (e) {
+      // Show "All cameras" option on first page
+      if (currentPage == 0) {
+        final allSelected = selectedCameras.length == sortedCameras.length;
         print(
-          'Error: Invalid input format. Please enter numbers separated by commas or "all"',
+          '0. [${allSelected ? '✓' : ' '}] All cameras (${allPoints.length} total photos)',
         );
       }
+
+      // Show cameras for current page
+      for (int i = startIndex; i < endIndex; i++) {
+        final camera = sortedCameras[i];
+        final percentage = (camera.value / allPoints.length * 100)
+            .toStringAsFixed(1);
+        final isSelected = selectedCameras.contains(camera.key);
+        final displayIndex = (i - startIndex) + 1;
+
+        print(
+          '$displayIndex. [${isSelected ? '✓' : ' '}] ${camera.key.padRight(35)} ${camera.value.toString().padLeft(5)} photos (${percentage}%)',
+        );
+      }
+
+      print('');
+      print('Commands:');
+      print('  1-$itemsPerPage : Toggle camera selection');
+      if (currentPage == 0) print('  0       : Toggle all cameras');
+      if (currentPage > 0) print('  p       : Previous page');
+      if (currentPage < totalPages - 1) print('  n       : Next page');
+      print('  done    : Finish selection');
+      print('  help    : Show this help');
+      print('');
+      print(
+        'Selected: ${selectedCameras.length}/${sortedCameras.length} cameras',
+      );
+
+      stdout.write('Enter command: ');
+      final input = stdin.readLineSync()?.trim().toLowerCase();
+
+      if (input == null || input.isEmpty) continue;
+
+      if (input == 'done') {
+        if (selectedCameras.isEmpty) {
+          print('No cameras selected! Selecting all cameras by default.');
+          selectedCameras.addAll(sortedCameras.map((e) => e.key));
+        }
+        break;
+      } else if (input == 'help') {
+        continue; // Will redisplay the page with help
+      } else if (input == 'n' && currentPage < totalPages - 1) {
+        currentPage++;
+      } else if (input == 'p' && currentPage > 0) {
+        currentPage--;
+      } else if (input == '0' && currentPage == 0) {
+        // Toggle all cameras
+        if (selectedCameras.length == sortedCameras.length) {
+          selectedCameras.clear();
+        } else {
+          selectedCameras.clear();
+          selectedCameras.addAll(sortedCameras.map((e) => e.key));
+        }
+      } else {
+        // Try to parse as camera selection number
+        final number = int.tryParse(input);
+        if (number != null && number >= 1 && number <= itemsPerPage) {
+          final actualIndex = startIndex + number - 1;
+          if (actualIndex < sortedCameras.length) {
+            final camera = sortedCameras[actualIndex];
+            if (selectedCameras.contains(camera.key)) {
+              selectedCameras.remove(camera.key);
+            } else {
+              selectedCameras.add(camera.key);
+            }
+          }
+        } else {
+          print('Invalid command. Type "help" for available commands.');
+          await Future.delayed(Duration(seconds: 1));
+        }
+      }
     }
+
+    print('\nFinal selection:');
+    if (selectedCameras.length == sortedCameras.length) {
+      print('Selected: All cameras');
+    } else {
+      print('Selected cameras: ${selectedCameras.join(', ')}');
+    }
+
+    // Show stats for selected cameras
+    final totalSelectedPhotos = selectedCameras
+        .map((camera) => cameraStats[camera] ?? 0)
+        .fold(0, (a, b) => a + b);
+    print('Total photos from selected cameras: $totalSelectedPhotos');
+
+    return selectedCameras;
   }
 
   Future<List<LocationPoint>> generateTimeline({
