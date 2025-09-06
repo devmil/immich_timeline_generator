@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Dart SDK
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: stable
+
+    - name: Get dependencies
+      run: dart pub get
+
+    - name: Verify formatting
+      run: dart format --output=none --set-exit-if-changed .
+
+    - name: Analyze project source
+      run: dart analyze --fatal-infos
+
+    - name: Run tests
+      run: dart test
+
+    - name: Test build (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: dart compile exe bin/immich_timeline_generator.dart -o test-build
+
+    - name: Test build (macOS)
+      if: matrix.os == 'macos-latest'
+      run: dart compile exe bin/immich_timeline_generator.dart -o test-build
+
+    - name: Test build (Windows)
+      if: matrix.os == 'windows-latest'
+      run: dart compile exe bin/immich_timeline_generator.dart -o test-build.exe

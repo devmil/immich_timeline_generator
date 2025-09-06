@@ -19,11 +19,33 @@ A Dart console application that connects to an Immich instance, extracts GPS coo
 
 ## Installation
 
+### Option 1: Download Precompiled Binary (Recommended)
+
+Download the latest release for your platform from the [GitHub Releases](../../releases) page:
+
+- **Linux**: `immich_timeline_generator-linux-x64` or `immich_timeline_generator-linux-arm64`
+- **macOS**: `immich_timeline_generator-macos-x64` or `immich_timeline_generator-macos-arm64`
+- **Windows**: `immich_timeline_generator-windows-x64.exe`
+
+```bash
+# Linux/macOS: Make executable
+chmod +x immich_timeline_generator-*
+
+# Run directly
+./immich_timeline_generator-* --help
+```
+
+### Option 2: Build from Source
+
 1. Ensure you have Dart SDK 3.9.0 or later installed
 2. Clone or download this repository
 3. Install dependencies:
    ```bash
    dart pub get
+   ```
+4. Run with:
+   ```bash
+   dart run bin/immich_timeline_generator.dart --help
    ```
 
 ## Usage
@@ -31,13 +53,25 @@ A Dart console application that connects to an Immich instance, extracts GPS coo
 ### Basic Usage
 
 ```bash
+# Using precompiled binary
+./immich_timeline_generator-linux-x64 -u https://your-immich-server.com -k your-api-key
+
+# Or using source code
 dart run bin/immich_timeline_generator.dart -u https://your-immich-server.com -k your-api-key
 ```
 
 ### Advanced Usage
 
 ```bash
-# Filter by specific album and set minimum photos per location
+# Using precompiled binary
+./immich_timeline_generator-linux-x64 \
+  -u https://your-immich-server.com \
+  -k your-api-key \
+  -a "Travel Photos" \
+  -m 5 \
+  -o my_timeline.json
+
+# Or using source code
 dart run bin/immich_timeline_generator.dart \
   -u https://your-immich-server.com \
   -k your-api-key \
