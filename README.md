@@ -161,7 +161,6 @@ This format is compatible with:
 - `longitudeE7`: Longitude × 10^7 (Google's integer format)
 - `timestamp`: ISO8601 timestamp (e.g., "2023-12-25T14:30:00.000Z")
 - `accuracy`: GPS accuracy in meters (default: 10)
-- Most other timeline visualization tools
 
 ## Configuration Options
 
@@ -282,5 +281,5 @@ This project is open source. See LICENSE file for details.
 ## Related Projects
 
 - [Immich](https://immich.app/) - Self-hosted photo and video backup solution
-- [Reitti](https://github.com/isokissa3/Reitti) - Self-hosted timeline service
+- [Reitti](https://www.dedicatedcode.com/projects/reitti/overview/) - Self-hosted timeline service
 - [Google Takeout](https://takeout.google.com/) - For Google Timeline exports
