@@ -279,7 +279,7 @@ class TimelineGenerator {
         final displayIndex = (i - startIndex) + 1;
 
         print(
-          '$displayIndex. [${isSelected ? '✓' : ' '}] ${camera.key.padRight(35)} ${camera.value.toString().padLeft(5)} photos (${percentage}%)',
+          '$displayIndex. [${isSelected ? '✓' : ' '}] ${camera.key.padRight(35)} ${camera.value.toString().padLeft(5)} photos ($percentage%)',
         );
       }
 
