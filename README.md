@@ -24,7 +24,7 @@ A Dart console application that connects to an Immich instance, extracts GPS coo
 Download the latest release for your platform from the [GitHub Releases](../../releases) page:
 
 - **Linux**: `immich_timeline_generator-linux-x64` or `immich_timeline_generator-linux-arm64`
-- **macOS**: `immich_timeline_generator-macos-x64` or `immich_timeline_generator-macos-arm64`
+- **macOS**: `immich_timeline_generator-macos-x64` (Intel Macs; Apple Silicon users can use Rosetta 2)
 - **Windows**: `immich_timeline_generator-windows-x64.exe`
 
 ```bash

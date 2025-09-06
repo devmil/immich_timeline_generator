@@ -63,9 +63,14 @@ The workflow will create the following binaries:
 |----------|-------------|----------|
 | Linux | x64 (Intel/AMD) | `immich_timeline_generator-linux-x64` |
 | Linux | ARM64 (Pi, etc.) | `immich_timeline_generator-linux-arm64` |
-| macOS | x64 (Intel Mac) | `immich_timeline_generator-macos-x64` |
-| macOS | ARM64 (Apple Silicon) | `immich_timeline_generator-macos-arm64` |
+| macOS | x64 (Intel Macs) | `immich_timeline_generator-macos-x64` |
 | Windows | x64 | `immich_timeline_generator-windows-x64.exe` |
+
+**Note**: 
+- Each binary is compiled on its native platform to ensure compatibility
+- Linux ARM64 is cross-compiled on Ubuntu runners (supported by Dart)
+- **Apple Silicon Mac users**: Use Rosetta 2 to run the Intel binary, or build from source
+- **No universal macOS binary**: Dart doesn't support creating universal binaries directly
 
 ## Download and Usage
 
@@ -77,7 +82,7 @@ chmod +x immich_timeline_generator-*
 
 # Run the tool
 ./immich_timeline_generator-linux-x64 --help
-./immich_timeline_generator-macos-arm64 --help
+./immich_timeline_generator-macos-x64 --help
 ```
 
 ```powershell
