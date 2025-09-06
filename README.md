@@ -9,7 +9,7 @@ A Dart console application that connects to an Immich instance, extracts GPS coo
 - **Immich Integration**: Connects to your Immich server using API key authentication
 - **GPS Extraction**: Extracts GPS coordinates from photo EXIF data
 - **Google Timeline Format**: Generates Records.json compatible with most timeline services
-- **Interactive Camera Selection**: Navigate with arrow keys and select cameras with space bar
+- **Paginated Camera Selection**: Navigate through cameras using numbered commands and page navigation
 - **Multi-User Support**: Filter by specific cameras to separate timelines for different users
 - **Album Filtering**: Option to limit processing to specific albums/folders
 - **Location Filtering**: Configurable minimum number of photos per location to filter out random GPS coordinates
@@ -59,15 +59,36 @@ dart run bin/immich_timeline_generator.dart \
 
 ## Camera Selection
 
-For multi-user Immich libraries, the application provides an interactive camera selection interface:
+For multi-user Immich libraries, the application provides a paginated camera selection interface:
 
-- **Interactive Menu**: Use arrow keys to navigate and space bar to select cameras
-- **Smart Defaults**: "All cameras" is selected by default for safety
-- **Photo Counts**: See how many photos each camera contributed
-- **Multi-Selection**: Choose any combination of cameras to include
+- **Paginated Display**: Shows 8 cameras per page for easy navigation
+- **Numbered Commands**: Use numbers (1-8) to toggle camera selection on/off
+- **Page Navigation**: Use 'n' for next page, 'p' for previous page
+- **All Cameras Option**: Use '0' to toggle selection of all cameras at once
+- **Visual Indicators**: Selected cameras are marked with ✓
+- **Photo Statistics**: See photo count and percentage for each camera
 - **Skip Option**: Use `--skip-camera-selection` to automatically include all cameras
 
-See [INTERACTIVE_CAMERA_SELECTION.md](INTERACTIVE_CAMERA_SELECTION.md) for detailed usage instructions.
+### Camera Selection Interface Example:
+
+```
+Camera Selection - Page 1 of 3
+============================================================
+0. [ ] All cameras (15,234 total photos)
+1. [✓] iPhone 14 Pro                     8,500 photos (55.8%)
+2. [ ] Samsung Galaxy S23                4,200 photos (27.6%)
+3. [✓] Canon EOS R5                      2,534 photos (16.6%)
+
+Commands:
+  1-8     : Toggle camera selection
+  0       : Toggle all cameras
+  n       : Next page
+  done    : Finish selection
+  help    : Show this help
+
+Selected: 2/12 cameras
+Enter command: 
+```
 
 ## Getting Your Immich API Key
 
@@ -88,7 +109,7 @@ The application generates a `Records.json` file in Google Timeline format:
     {
       "latitudeE7": 377749000,
       "longitudeE7": -1224194000,
-      "timestampMs": "1703516200000",
+      "timestamp": "2023-12-25T14:30:00.000Z",
       "accuracy": 10
     }
   ]
@@ -98,6 +119,14 @@ The application generates a `Records.json` file in Google Timeline format:
 This format is compatible with:
 - Reitti (self-hosted timeline service)
 - Google Timeline imports
+- Other timeline services that support Google's Records.json format
+
+### Field Descriptions
+
+- `latitudeE7`: Latitude × 10^7 (Google's integer format)
+- `longitudeE7`: Longitude × 10^7 (Google's integer format)
+- `timestamp`: ISO8601 timestamp (e.g., "2023-12-25T14:30:00.000Z")
+- `accuracy`: GPS accuracy in meters (default: 10)
 - Most other timeline visualization tools
 
 ## Configuration Options
@@ -121,6 +150,34 @@ Filters out locations with fewer than the specified number of photos:
 
 ## Examples
 
+### Basic Timeline Generation
+```bash
+# Generate timeline with interactive camera selection
+dart run bin/immich_timeline_generator.dart \
+  -u https://immich.mydomain.com \
+  -k abc123...
+```
+
+### Multi-User Timeline (Camera Selection)
+```bash
+# Use paginated camera selection for multi-user libraries
+dart run bin/immich_timeline_generator.dart \
+  -u https://immich.mydomain.com \
+  -k abc123... \
+  -o family_timeline.json
+# Follow the numbered commands to select specific cameras/phones
+```
+
+### Automated Processing (Skip Camera Selection)
+```bash
+# Skip camera selection and include all cameras
+dart run bin/immich_timeline_generator.dart \
+  -u https://immich.mydomain.com \
+  -k abc123... \
+  --skip-camera-selection \
+  -o complete_timeline.json
+```
+
 ### Travel Timeline
 ```bash
 # Generate timeline from travel album with strict filtering
@@ -132,14 +189,15 @@ dart run bin/immich_timeline_generator.dart \
   -o vacation_2024_timeline.json
 ```
 
-### Complete Photo Library
+### High-Performance Processing
 ```bash
-# Process entire library with minimal filtering
+# Process large libraries with increased concurrency
 dart run bin/immich_timeline_generator.dart \
   -u https://immich.mydomain.com \
   -k abc123... \
-  -m 2 \
-  -o complete_timeline.json
+  -c 50 \
+  --skip-camera-selection \
+  -m 2
 ```
 
 ## Performance
